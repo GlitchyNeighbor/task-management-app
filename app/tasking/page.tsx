@@ -1,8 +1,9 @@
 "use client";
 import { PinIcon, Check, TimerIcon, SignalMediumIcon, SignalHighIcon, SignalIcon, LogOut } from "lucide-react";
+import { useMemo } from "react";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { getSupabaseClient } from "@/lib/supabase";
 
 type Task = {
   id: string;
@@ -22,7 +23,7 @@ const TaskManager = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<"all" | "low" | "medium" | "high">("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "to-do" | "in-progress" | "done">("all");
-
+  const supabase = useMemo(() => getSupabaseClient(), []);
   const [taskList, setTaskList] = useState<Task[]>([]);
   const [taskDoneList, setTaskDoneList] = useState<Task[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -30,7 +31,12 @@ const TaskManager = () => {
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
+  if (!supabase) {
+    return <p>Service unavailable</p>;
+  }
+
   const handleLogout = async () => {
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.signOut();

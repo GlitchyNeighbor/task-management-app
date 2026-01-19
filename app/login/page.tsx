@@ -1,42 +1,48 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock, Loader } from "lucide-react";
 
-const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const router = useRouter();
+    const Login = () => {
+        const [email, setEmail] = useState("");
+        const [password, setPassword] = useState("");
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState("");
+        const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+        const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError("");
 
-    try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+            setError("Auth service unavailable");
+            setLoading(false);
+            return;
+        }
 
-      if (signInError) {
-        setError(signInError.message);
-        setLoading(false);
-        return;
-      }
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+            });
 
-      if (data) {
-        router.push("/tasking");
-      }
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
-      setLoading(false);
-    }
-  };
+            if (error) {
+            setError(error.message);
+            setLoading(false);
+            return;
+            }
+
+            router.replace("/tasking");
+        } catch (err: any) {
+            setError(err.message || "Login failed");
+            setLoading(false);
+        }
+    };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">

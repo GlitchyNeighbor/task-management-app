@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import Link from "next/link";
 import { Mail, Lock, Loader } from "lucide-react";
 
@@ -14,51 +14,57 @@ const Register = () => {
   const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  e.preventDefault();
+  setError("");
 
-    if (!email || !password || !confirmPassword) {
-      setError("All fields are required");
-      return;
-    }
+  if (!email || !password || !confirmPassword) {
+    setError("All fields are required");
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
+  if (password !== confirmPassword) {
+    setError("Passwords do not match");
+    return;
+  }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
+  if (password.length < 6) {
+    setError("Password must be at least 6 characters");
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    setError("Auth service unavailable");
+    setLoading(false);
+    return;
+  }
 
-      if (signUpError) {
-        setError(signUpError.message);
-        setLoading(false);
-        return;
-      }
+  try {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
 
-      // Clear form
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
-
-      // Redirect to login
-      router.push("/login");
-    } catch (err) {
-      setError("An unexpected error occurred");
-      console.error(err);
+    if (error) {
+      setError(error.message);
       setLoading(false);
+      return;
     }
-  };
+
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+
+    router.replace("/login");
+  } catch (err) {
+    console.error(err);
+    setError("An unexpected error occurred");
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
