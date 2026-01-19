@@ -14,7 +14,7 @@ export default function Home() {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
-      router.replace(session?.user ? "/tasking" : "/login");
+      router.replace(session?.user ? "/task-app" : "/login");
     };
 
     checkAuth();
