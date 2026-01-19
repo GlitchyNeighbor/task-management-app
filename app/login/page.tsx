@@ -36,7 +36,7 @@ import { Mail, Lock, Loader } from "lucide-react";
             return;
             }
 
-            router.replace("/tasking");
+            router.replace("/task-app");
         } catch (err: any) {
             setError(err.message || "Login failed");
             setLoading(false);
