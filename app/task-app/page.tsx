@@ -1,8 +1,9 @@
 "use client";
 import { PinIcon, Check, TimerIcon, SignalMediumIcon, SignalHighIcon, SignalIcon, LogOut } from "lucide-react";
+import { useMemo } from "react";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { getSupabaseClient } from "@/lib/supabase";
 
 type Task = {
   id: string;
@@ -19,14 +20,23 @@ const TaskManager = () => {
   const [status, setStatus]  = useState<Task["status"]>("to-do");
   const [priority, setPriority] = useState<Task["priority"]>("low");
   const [date,setDate] = useState("");
-
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState<"all" | "low" | "medium" | "high">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "to-do" | "in-progress" | "done">("all");
+  const supabase = useMemo(() => getSupabaseClient(), []);
   const [taskList, setTaskList] = useState<Task[]>([]);
   const [taskDoneList, setTaskDoneList] = useState<Task[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
+  if (!supabase) {
+    return <p>Service unavailable</p>;
+  }
+
   const handleLogout = async () => {
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.signOut();
@@ -42,91 +52,170 @@ const TaskManager = () => {
     }
   };
 
-  useEffect(() => {
-    const savedTaskList = localStorage.getItem("taskList");
-    const savedTaskDoneList = localStorage.getItem("taskDoneList");
+  // Fetch tasks from Supabase
+  const fetchTasks = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .neq("status", "done");
 
-    if (savedTaskList) {
-      try {
-        setTaskList(JSON.parse(savedTaskList));
-      } catch (e) {
-        console.error("Failed to parse saved tasks:", e);
+      const { data: doneTasks, error: doneError } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("status", "done");
+
+      if (error) console.error("Error fetching tasks:", error);
+      if (doneError) console.error("Error fetching done tasks:", doneError);
+
+      setTaskList((data as Task[]) || []);
+      setTaskDoneList((doneTasks as Task[]) || []);
+      setIsLoaded(true);
+    } catch (err) {
+      console.error("Failed to fetch tasks:", err);
+      setIsLoaded(true);
+    }
+  };
+
+  // Initialize user and fetch tasks
+  useEffect(() => {
+    const initializeUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        router.push("/login");
+        return;
       }
-    }
+      setUser(session.user);
+      fetchTasks(session.user.id);
+    };
+    initializeUser();
+  }, [router]);
 
-    if (savedTaskDoneList) {
-      try {
-        setTaskDoneList(JSON.parse(savedTaskDoneList));
-      } catch (e) {
-        console.error("Failed to parse saved done tasks:", e);
+  // Add task to Supabase
+  const setTasks = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .insert([
+          {
+            user_id: user.id,
+            title,
+            description,
+            status,
+            priority,
+            date: date || null,
+          },
+        ]);
+
+      if (error) {
+        console.error("Error adding task:", error);
+        return;
       }
+
+      // Refresh tasks
+      await fetchTasks(user.id);
+
+      // Clear form
+      setTitle("");
+      setDescription("");
+      setStatus("to-do");
+      setPriority("low");
+      setDate("");
+    } catch (err) {
+      console.error("Failed to add task:", err);
     }
+  };
 
-    setIsLoaded(true);
-  }, []);
+  // Mark task as done
+  const doneTask = async (id: string) => {
+    if (!user) return;
 
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem("taskList", JSON.stringify(taskList));
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: "done" })
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error marking task as done:", error);
+        return;
+      }
+
+      // Refresh tasks
+      await fetchTasks(user.id);
+    } catch (err) {
+      console.error("Failed to mark task as done:", err);
     }
-  }, [taskList, isLoaded]);
+  };
 
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem("taskDoneList", JSON.stringify(taskDoneList));
+  // Remove task
+  const removeTask = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error removing task:", error);
+        return;
+      }
+
+      // Refresh tasks
+      await fetchTasks(user.id);
+    } catch (err) {
+      console.error("Failed to remove task:", err);
     }
-  }, [taskDoneList, isLoaded]);
-
-  const setTasks = () => {
-    const id = (typeof crypto !== "undefined" && "randomUUID" in crypto)
-    ? (crypto as any).randomUUID()
-    : Date.now().toString();
-    
-    const newTask: Task = {id, title, description, status, priority, date: date || undefined};
-    setTaskList(prev => [newTask, ...prev]);
-
-    setTitle("");
-    setDescription("");
-    setStatus("to-do");
-    setPriority("low");
-    setDate("");  
-
-  }
-
-  const doneTask = (id: string) => {
-        setTaskList(prev => {
-          const taskToMove = prev.find(t => t.id === id);
-          if (!taskToMove) return prev;
-
-          const movedTask: Task = { ...taskToMove, status: 'done' };
-
-          setTaskDoneList(donePrev => {
-            if (donePrev.some(d => d.id === id)) return donePrev;
-            return [movedTask, ...donePrev];
-          });
-
-          return prev.filter(t => t.id !== id);
-        });
-  }
-
-  const removeTask = (id: string) => {
-    setTaskDoneList(prev => prev.filter(t => t.id !== id));
-  }
+  };
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  
+  // Filter tasks based on search query and filters
+  const filteredTaskList = taskList.filter(t => {
+    const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesPriority = filterPriority === "all" || t.priority === filterPriority;
+    const matchesStatus = filterStatus === "all" || t.status === filterStatus;
+    return matchesSearch && matchesPriority && matchesStatus;
+  });
+
+  const filteredTaskDoneList = taskDoneList.filter(t => {
+    const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesPriority = filterPriority === "all" || t.priority === filterPriority;
+    return matchesSearch && matchesPriority;
+  });
+
   const tasksByDay: Record<string, Task[]> = days.reduce((acc, day, i) => {
     const weekdayIndex = (i + 1) % 7;
-    acc[day] = taskList.filter((t) => t.date && new Date(t.date).getDay() === weekdayIndex);
+    acc[day] = filteredTaskList.filter((t) => t.date && new Date(t.date).getDay() === weekdayIndex);
     return acc;
   }, {} as Record<string, Task[]>);
 
-  const unscheduledTasks = taskList.filter((t) => !t.date);
+  const unscheduledTasks = filteredTaskList.filter((t) => !t.date);
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+        <div className="text-center">
+          <p className="text-slate-400">Loading tasks...</p>
+        </div>
+      </div>
+    );
+  }
 
 
   return (
     <div className="flex min-h-screen bg-zinc-50 font-sans dark:bg-black m-3">
-      <main className="bg-gray-900 flex flex-col gap-3 w-2/12 px-2 py-2 h-full">
-
+      <main className="bg-gray-900 flex flex-col gap-3 w-2/12 px-2 py-2 h-full relative">
         <div className="flex flex-col">
           <label>Title:</label>
             <input
@@ -245,9 +334,52 @@ const TaskManager = () => {
           <button className="bg-blue-700 w-full" onClick={setTasks}>Add Task</button>
         </div>
 
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          disabled={loading}
+          className="bg-red-600 hover:bg-red-700 disabled:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition duration-200 w-full mt-auto"
+        >
+          <LogOut size={16} />
+          Logout
+        </button>
+
       </main>
 
       <section className="w-full h-full ml-2 flex flex-col">
+        {/* Search and Filter Bar */}
+        <div className="mb-4 flex gap-3">
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-2 bg-gray-800 text-white placeholder-slate-400 border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value as any)}
+            className="px-4 py-2 bg-gray-800 text-white border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="all">All Priority</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as any)}
+            className="px-4 py-2 bg-gray-800 text-white border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="all">All Status</option>
+            <option value="to-do">To Do</option>
+            <option value="in-progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+
         <div className="overflow-auto">
           <table className="w-full table-fixed border-collapse text-white">
             <thead>
@@ -356,10 +488,10 @@ const TaskManager = () => {
           </div>
         )}
 
-        {taskDoneList.length > 0 && (
+        {filteredTaskDoneList.length > 0 && (
           <div className="mt-4">
             <ul>
-              {taskDoneList.map(t => (
+              {filteredTaskDoneList.map(t => (
                 <li key={t.id} className="mb-2 p-2 bg-gray-800 rounded">
                   <h4 className="font-semibold text-green-500">Task Finished</h4>
                   <div className="font-semibold">
