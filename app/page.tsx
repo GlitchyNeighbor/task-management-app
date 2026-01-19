@@ -1,6 +1,6 @@
 "use client";
 import { PinIcon, Check, TimerIcon, SignalMediumIcon, SignalHighIcon, SignalIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Task = {
   id: string;
@@ -19,8 +19,43 @@ export default function Home() {
   const [date,setDate] = useState("");
 
   const [taskList, setTaskList] = useState<Task[]>([]);
-
   const [taskDoneList, setTaskDoneList] = useState<Task[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    const savedTaskList = localStorage.getItem("taskList");
+    const savedTaskDoneList = localStorage.getItem("taskDoneList");
+
+    if (savedTaskList) {
+      try {
+        setTaskList(JSON.parse(savedTaskList));
+      } catch (e) {
+        console.error("Failed to parse saved tasks:", e);
+      }
+    }
+
+    if (savedTaskDoneList) {
+      try {
+        setTaskDoneList(JSON.parse(savedTaskDoneList));
+      } catch (e) {
+        console.error("Failed to parse saved done tasks:", e);
+      }
+    }
+
+    setIsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem("taskList", JSON.stringify(taskList));
+    }
+  }, [taskList, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem("taskDoneList", JSON.stringify(taskDoneList));
+    }
+  }, [taskDoneList, isLoaded]);
 
   const setTasks = () => {
     const id = (typeof crypto !== "undefined" && "randomUUID" in crypto)
@@ -54,10 +89,9 @@ export default function Home() {
         });
   }
 
-  // Group tasks by weekday (Monday..Sunday). Tasks without a date are "unscheduled".
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const tasksByDay: Record<string, Task[]> = days.reduce((acc, day, i) => {
-    const weekdayIndex = (i + 1) % 7; // JS getDay(): 0 = Sunday, 1 = Monday, ...
+    const weekdayIndex = (i + 1) % 7;
     acc[day] = taskList.filter((t) => t.date && new Date(t.date).getDay() === weekdayIndex);
     return acc;
   }, {} as Record<string, Task[]>);
@@ -184,7 +218,7 @@ export default function Home() {
         </div>
 
         <div>
-          <button className="bg-blue-700 w-full" onClick={setTasks}>Register</button>
+          <button className="bg-blue-700 w-full" onClick={setTasks}>Add Task</button>
         </div>
 
       </main>
@@ -225,6 +259,9 @@ export default function Home() {
                             <div className="text-sms opacity-80 text-red-500">{task.status}</div>
                           )}
 
+                        </div>
+                        <div>
+                          {task.date}
                         </div>
 
                         <div className="mt-2 justify-self-end">
