@@ -89,6 +89,10 @@ export default function Home() {
         });
   }
 
+  const removeTask = (id: string) => {
+    setTaskDoneList(prev => prev.filter(t => t.id !== id));
+  }
+
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const tasksByDay: Record<string, Task[]> = days.reduce((acc, day, i) => {
     const weekdayIndex = (i + 1) % 7;
@@ -376,6 +380,10 @@ export default function Home() {
                         {t.status}
                       </div>
                     )}
+                  </div>
+
+                  <div className="mt-2">
+                    <button className="bg-red-700 px-3" onClick={() => removeTask(t.id)}>Remove</button>
                   </div>
                 </li>
               ))}
