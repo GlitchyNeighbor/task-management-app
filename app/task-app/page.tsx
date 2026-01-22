@@ -15,6 +15,7 @@ type Task = {
 };
 
 const TaskManager = () => {
+  const [error, setError] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus]  = useState<Task["status"]>("to-do");
@@ -38,18 +39,29 @@ const TaskManager = () => {
   }
 
   const handleLogout = async () => {
-
     setLoading(true);
+    setError(""); // Clear any existing errors
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setError("Auth service unavailable");
+      setLoading(false);
+      return;
+    }
+
     try {
       const { error } = await supabase.auth.signOut();
+      
       if (error) {
-        console.error("Logout error:", error);
-      } else {
-        router.push("/login");
+        setError(error.message);
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Logout failed:", err);
-    } finally {
+
+      // Use replace instead of push to prevent back navigation to protected route
+      router.replace("/login");
+    } catch (err: any) {
+      setError(err.message || "Logout failed");
       setLoading(false);
     }
   };
